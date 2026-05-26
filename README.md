@@ -1,6 +1,6 @@
 # FreeFire API
 
-A high-performance reverse-engineered FreeFire API built with Flask, Protocol Buffers, and AES-128-CBC encryption. Interacts directly with Garena's internal game services to provide player stats, profile data, and account management.
+A lightweight, high-performance reverse-engineered FreeFire API that interacts directly with Garena's internal game services using compiled Protocol Buffers and AES-128-CBC encryption. Enables structured, real-time access to player statistics, profiles, server details, and account authentication — all through a clean REST interface built with Flask.
 
 ## Features
 
