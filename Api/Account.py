@@ -1,6 +1,6 @@
 import requests
 import Proto.compiled.MajorLogin_pb2
-from Utilities.until import encode_protobuf, decode_protobuf
+from Utilities.until import encode_protobuf, decode_protobuf_full
 import json
 from Configuration.APIConfiguration import RELEASEVERSION, DEBUG
 
@@ -34,16 +34,19 @@ def get_garena_token(uid, password):
     }
 
     try:
-        response = requests.post(url, data=payload, headers=headers)
+        response = requests.post(url, data=payload, headers=headers, timeout=15)
         response.raise_for_status()
         if DEBUG:
             print("[oauth/guest/token/grant] Response(raw):", response.content, "\n")
         return response.json()
+    except requests.exceptions.Timeout:
+        print(f"[oauth/guest/token/grant] Timeout")
+        return None
     except requests.exceptions.RequestException as e:
-        print(f"Error making request: {e}")
+        print(f"[oauth/guest/token/grant] Error: {e}")
         return None
     except json.JSONDecodeError as e:
-        print(f"Error parsing JSON response: {e}")
+        print(f"[oauth/guest/token/grant] JSON error: {e}")
         return None
 
 
@@ -81,17 +84,24 @@ def get_major_login(logintoken, openid):
         'X-Unity-Version': "2018.4.11f1",
         'X-GA': "v1 1",
         'ReleaseVersion': RELEASEVERSION,
-        'Content-Type': "application/x-www-form-urlencoded"
     }
 
     # Make the request
-    response = requests.post(url, data=encrypted_payload, headers=headers)
+    try:
+        response = requests.post(url, data=encrypted_payload, headers=headers, timeout=15)
+    except requests.exceptions.Timeout:
+        print("[MajorLogin] Timeout")
+        return False
+    except requests.exceptions.RequestException as e:
+        print(f"[MajorLogin] Request failed: {e}")
+        return False
+
     if DEBUG:
         print("[MajorLogin] Response(raw):", response.content, "\n")
     try:
-        # Decode and return the response as JSON
-        message = decode_protobuf(response.content, Proto.compiled.MajorLogin_pb2.response)
-        return message
+        # Decode and return the response as JSON (full)
+        decoded = decode_protobuf_full(response.content, Proto.compiled.MajorLogin_pb2.response)
+        return decoded
     except:
         print("[MajorLogin] Error:", response.text)
     return False

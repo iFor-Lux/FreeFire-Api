@@ -1,9 +1,11 @@
 import requests
+from urllib.parse import urlparse
 import Proto.compiled.PlayerPersonalShow_pb2
 import Proto.compiled.PlayerStats_pb2
 import Proto.compiled.PlayerCSStats_pb2
 import Proto.compiled.SearchAccountByName_pb2
-from Utilities.until import encode_protobuf, decode_protobuf
+from Utilities.until import encode_protobuf, decode_protobuf_full
+from Api.Errors import ProtobufError, APIError
 import json
 from Configuration.APIConfiguration import RELEASEVERSION, DEBUG
 
@@ -70,14 +72,14 @@ def search_account_by_keyword(server_url, auth_token, keyword):
 
         # --- Decode Response ---
         try:
-            decoded = decode_protobuf(
+            decoded = decode_protobuf_full(
                 response.content,
                 Proto.compiled.SearchAccountByName_pb2.response
             )
         except Exception as e:
             raise ValueError(f"Failed to decode protobuf response: {e}")
 
-        return json.loads(json.dumps(decoded, default=str))
+        return decoded
 
     except Exception as e:
         # Catch any unexpected runtime issues
@@ -106,8 +108,11 @@ def get_player_personal_show(serverurl, authorization, account_id, need_gallery_
         "needSparkInfo": need_spark_info,
     }, Proto.compiled.PlayerPersonalShow_pb2.request())
 
+    parsed_url = urlparse(serverurl)
+    host = parsed_url.netloc if parsed_url.netloc else "client.ind.freefiremobile.com"
+
     headers = {
-      "Host": "client.ind.freefiremobile.com",
+      "Host": host,
       "User-Agent": "UnityPlayer/2022.3.47f1 (UnityWebRequest/1.0, libcurl/8.5.0-DEV)",
       "Accept": "*/*",
       "Accept-Encoding": "deflate, gzip",
@@ -116,23 +121,19 @@ def get_player_personal_show(serverurl, authorization, account_id, need_gallery_
       "ReleaseVersion": RELEASEVERSION,
       "Content-Type": "application/x-www-form-urlencoded",
       "X-Unity-Version": "2022.3.47f1",
-      "Content-Length": "16"
     }
     
     
     
-    response = requests.post(url, data=encrypted_payload, headers=headers)
+    response = requests.post(url, data=encrypted_payload, headers=headers, timeout=15)
     if DEBUG:
         print("[GetPlayerPersonalShow] Response(raw):", response.content, "\n")
     try:
         response.raise_for_status()  # Raise an exception for bad status codes
         
-        # Decode protobuf response
-        message = decode_protobuf(response.content, Proto.compiled.PlayerPersonalShow_pb2.response)
-        
-        # Convert to JSON
-        json_data = json.loads(json.dumps(message, default=str))
-        return json_data
+        # Decode protobuf response - full with raw+known
+        decoded = decode_protobuf_full(response.content, Proto.compiled.PlayerPersonalShow_pb2.response)
+        return decoded
         
     except requests.exceptions.RequestException as e:
         print(f"Request failed: {response.text}")
@@ -220,13 +221,12 @@ def get_player_stats(authorization, serverurl, mode, uid, match_type="CAREER"):
             'User-Agent': "Dalvik/2.1.0 (Linux; U; Android 13; A063 Build/TKQ1.221220.001)",
             'Connection': "Keep-Alive",
             'Accept-Encoding': "gzip",
-            'Content-Type': "application/octet-stream",
             'Expect': "100-continue",
             'Authorization': f"Bearer {authorization}",
             'X-Unity-Version': "2018.4.11f1",
             'X-GA': "v1 1",
             'ReleaseVersion': RELEASEVERSION,
-            'Content-Type': "application/x-www-form-urlencoded"
+            'Content-Type': "application/octet-stream"
         }
         
         # Make request with timeout
@@ -248,13 +248,13 @@ def get_player_stats(authorization, serverurl, mode, uid, match_type="CAREER"):
         if not response.content:
             raise APIError("Empty response from server")
         
-        # Decode response
+        # Decode response - full with raw+known
         try:
-            message = decode_protobuf(response.content, proto_module.response)
+            decoded = decode_protobuf_full(response.content, proto_module.response)
         except Exception as e:
             raise ProtobufError(f"Failed to decode protobuf response: {str(e)}")
         
-        return message
+        return decoded
         
     except (ValueError, ConnectionError, ProtobufError, APIError):
         # Re-raise our custom exceptions
